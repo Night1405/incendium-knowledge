@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Respond preview</title>
+    <!-- Runs the REAL app (DevelopmentResources/incendium_phone/apps/respond) with
+         a stand-in for the game and server, so pages can be checked in a browser.
+         respond-preview.html?device=phone|tablet&role=officer|firefighter&booked=0&alert=2#/status -->
+    <base href="../../../DevelopmentResources/incendium_phone/apps/respond/">
+    <link rel="stylesheet" href="app.css">
+</head>
+<body>
+    <div class="app" id="app"></div>
+    <div id="overlay"></div>
+    <div class="toast" id="toast"></div>
+    <script>
+    (function () {
+        const qs = new URLSearchParams(location.search);
+        const device = qs.get('device') || 'phone';
+        const officer = (qs.get('role') || 'officer') === 'officer';
+        const booked = qs.get('booked') !== '0';
+        const img = p => new URL('design/img/' + p, location.href).href;
+        const handlers = {};
+        let unitStatus = '2';
+        const quals = [{ skill: 'FF', label: 'Firefighter', colour: '#2e7d32' }, { skill: 'DIM', label: 'Detection, Identification & Monitoring', colour: '#7b1fa2' }];
+        const settings = { mode: 'assigned', stations: ['Handsworth'], volume: 0.6, push: { enabled: true, on: false, assigned: true, station: true, appHint: '1a2b', userHint: null } };
+        const queue = [];
+        let n = 0;
+        const turnout = () => ({
+            ref: '104' + (5 + n) + '/061026', title: n++ % 2 ? 'RTCPR - RTC Persons Reported' : 'FI - Fire',
+            address: 'Unit 12, Booth Street Industrial Estate, Handsworth', text: qs.get('long') ? 'Smoke seen from roof vents of a two-storey industrial unit. Caller on site reports the building is evacuated but one worker is unaccounted for. Gas cylinders believed stored at the rear of the premises. Approach from Booth Street; the access road from Soho Road is blocked by a lorry. Police are on scene managing traffic.' : 'Smoke seen from roof vents. Caller on site, building evacuated.',
+            station: 'Handsworth', callsigns: ['A071', 'A075', 'D021'], grading: 'Emergency', channel: 'FIREOPS4', time: '14:02', reason: 'assigned',
+        });
+        for (let i = 0; i < +(qs.get('alert') || 0); i++) queue.push(turnout());
+
+        function state() {
+            return {
+                device, version: '0.2.0',
+                brigade: { name: 'West Midlands Fire Service', short: 'WMFS', logo: img('brand/WMFSLogo.svg'), logoWide: img('brand/WMFSLogo-horizontal-white.png') },
+                incendiumLogo: img('brand/incendium.png'), incendiumLogoFull: img('brand/incendium-solutions.png'),
+                fms: true,
+                me: { name: officer ? 'A. Smith' : 'R. Hughes', roll: officer ? '4127' : '6012', rank: officer ? 'Watch Commander' : 'Firefighter',
+                      insignia: img('ranks/' + (officer ? 'WCDR' : 'FF') + '.png'), quals, callsign: booked ? 'A071' : null, station: booked ? 'Handsworth' : '' },
+                bookedOn: booked,
+                unit: booked ? { status: unitStatus, statusText: '' } : null,
+                crew: booked ? [
+                    { name: 'A. Smith', roll: '4127', rank: 'Watch Commander', insignia: img('ranks/WCDR.png'), quals, me: officer || null },
+                    { name: 'J. Patel', roll: '5390', rank: 'Crew Commander', insignia: img('ranks/CCDR.png'), quals: [{ skill: 'FF', colour: '#2e7d32' }, { skill: 'HP', colour: '#368bb5' }] },
+                    { name: 'R. Hughes', roll: '6012', rank: 'Firefighter', insignia: img('ranks/FF.png'), quals: [{ skill: 'FF', colour: '#2e7d32' }, { skill: 'FIPS', colour: '#000000' }] },
+                ] : [],
+                incident: booked ? { ref: '1042/061026', code: 'HFPR', opening: 'HFPR - House Fire Persons Reported', category: 'House Fire', description: 'Smoke issuing from first floor window. One occupant unaccounted for.',
+                    address: '27 Holly Road, Handsworth', grading: 'Emergency', channel: 'FIREOPS2', created: '13:41',
+                    units: [{ cs: 'A071', label: 'Pump Rescue Ladder', station: 'Handsworth', status: '6', statusText: 'On scene' }, { cs: 'D021', label: 'Pump Rescue Ladder', station: 'Brierley Hill', status: '5', statusText: 'En route' }] } : null,
+                incidents: [{ ref: '1043/061026', opening: 'RTCPR - RTC Persons Reported', address: 'A41 Soho Road', category: 'Special Service', units: 2 },
+                            { ref: '1044/061026', opening: 'AFA - Alarms', address: 'Merry Hill Centre, Brierley Hill', category: 'False Alarm', units: 1 }],
+                comms: { unit: 'HANDSWORTH' },
+                statuses: [{ code: '2', label: 'Available', tone: 'green' }, { code: '4', label: 'Refreshments', tone: 'blue' }, { code: '5', label: 'En route', tone: 'amber' },
+                           { code: '6', label: 'On scene', tone: 'red' }, { code: '7', label: 'Committed', tone: 'red' }, { code: '11', label: 'Book off', tone: 'grey' }],
+                sections: { status: officer && (device === 'phone' || !!qs.get('tabstatus')), turnouts: officer, settings: officer, overview: true, knowledge: true, hydrants: true, ssri: true, risk: true, irs: officer },
+                settings: officer ? settings : null,
+                stations: ['Brierley Hill', 'Handsworth', 'Highgate'],
+                queue: officer ? queue.slice() : [],
+                stats: { incidents: 3, bookedOn: 17 },
+            };
+        }
+
+        const P = (name, roll, rank, img_, q) => ({ name, roll, rank, level: 1, insignia: img('ranks/' + img_ + '.png'), quals: q });
+        const FF = { skill: 'FF', colour: '#2e7d32' }, TRU = { skill: 'TRU', colour: '#C0191F' }, HP = { skill: 'HP', colour: '#368bb5' }, DIM = { skill: 'DIM', colour: '#7b1fa2' }, FIPS = { skill: 'FIPS', colour: '#000000' };
+        const overview = {
+            stations: [
+                { name: 'Handsworth', code: 'A07', total: 7, mine: true, callsigns: [
+                    { cs: 'A071', label: 'Pump Rescue Ladder', vehicle: 'Pump Rescue Ladder', status: '6', statusText: 'On scene', mine: true, crew: [P('A. Smith', '4127', 'Watch Commander', 'WCDR', [FF, DIM]), P('J. Patel', '5390', 'Crew Commander', 'CCDR', [FF, HP]), P('R. Hughes', '6012', 'Firefighter', 'FF', [FF, FIPS])] },
+                    { cs: 'A075', label: 'Pump', vehicle: '', status: '5', statusText: 'En route', crew: [P('S. Begum', '5021', 'Crew Commander', 'CCDR', [FF, TRU]), P('L. Okafor', '6230', 'Firefighter', 'FF', [FF, HP])] },
+                    { cs: 'A077', label: 'Brigade Response Vehicle', vehicle: 'Brigade Response Vehicle', status: '2', statusText: 'Available', crew: [P('K. Evans', '4880', 'Crew Commander', 'CCDR', [FF, TRU, HP]), P('T. Nowak', '6118', 'Firefighter', 'FF', [FF, TRU])] },
+                ] },
+                { name: 'Brierley Hill', code: 'D02', total: 3, callsigns: [
+                    { cs: 'D021', label: 'Pump Rescue Ladder', vehicle: 'Pump Rescue Ladder', status: '5', statusText: 'En route', crew: [P('P. Grant', '3904', 'Station Commander', 'SCDR', [FF, DIM]), P('H. Ali', '6077', 'Firefighter', 'FF', [FF]), P('C. Reid', '6402', 'Firefighter', 'FF', [FF, FIPS])] },
+                ] },
+                { name: 'Highgate', code: 'E01', total: 0, callsigns: [] },
+            ],
+            incidents: [
+                { ref: '1042/061026', opening: 'HFPR - House Fire Persons Reported', category: 'House Fire', address: '27 Holly Road, Handsworth', created: '2026-10-06 13:41:00', grading: 'Emergency', channel: 'FIREOPS2', mine: true, description: 'Smoke issuing from first floor window. Caller reports one occupant unaccounted for.',
+                  units: [{ cs: 'A071', label: 'Pump Rescue Ladder', station: 'Handsworth', status: '6', statusText: 'On scene' }, { cs: 'D021', label: 'Pump Rescue Ladder', station: 'Brierley Hill', status: '5', statusText: 'En route' }] },
+                { ref: '1043/061026', opening: 'RTCPR - RTC Persons Reported', category: 'Special Service', address: 'A41 Soho Road, junction with Grove Lane', created: '2026-10-06 13:55:00', grading: 'Emergency', channel: 'FIREOPS3',
+                  units: [{ cs: 'A077', label: 'Brigade Response Vehicle', station: 'Handsworth', status: '5', statusText: 'En route' }] },
+                { ref: '1044/061026', opening: 'AFA - Alarms', category: 'False Alarm', address: 'Merry Hill Centre, Brierley Hill', created: '2026-10-06 13:59:00', grading: 'Priority', channel: 'FIREOPS1',
+                  units: [{ cs: 'D025', label: 'Pump', station: 'Brierley Hill', status: '5', statusText: 'En route' }] },
+            ],
+        };
+        const logs = {
+            '1042/061026': [
+                { created: '2026-10-06 13:52:00', by: 'A071', text: 'Make pumps 3. Two BA committed, persons reported. One hose reel in use.' },
+                { created: '2026-10-06 13:48:00', by: 'A071', text: 'In attendance. Two-storey terrace, 50% of first floor alight.' },
+                { created: '2026-10-06 13:42:00', by: 'Control', text: 'A071, A075, D021 mobilised.' },
+                { created: '2026-10-06 13:41:00', by: 'Control', text: 'Call from neighbour, smoke from first floor window. One occupant possibly inside.' },
+            ],
+        };
+
+        const kbArticles = [
+            { id: 'ba-entry-control', title: 'BA Entry Control', category: 'ba', tags: ['BA', 'ECB', 'Safety'], updated: '2026-10-06', pinned: true, preview: 'Entry control keeps track of every wearer committed to a risk area.', words: 'entry control wearer' },
+            { id: 'hazmat-first-actions', title: 'Hazmat: First Actions', category: 'hazmat', tags: ['Hazmat', 'DIM', 'UN number'], updated: '2026-10-06', preview: 'The first actions at a hazardous materials incident.', words: 'hazmat dim' },
+        ];
+        const kbBody = { 'ba-entry-control': "# BA Entry Control\n\nEntry control keeps track of every wearer committed to a risk area. It **must** be set up before anyone enters, and the Entry Control Operative (ECO) must not wear BA themselves. See also [Hazmat: First Actions](hazmat-first-actions).\n\n> [!CAUTION]\n> Never commit wearers without a working entry control board and an emergency team on standby at Stage 2.\n\n## Stages of entry control\n\n1. **Stage 1:** a single entry point, up to two BA teams, the ECO at the entry point.\n2. **Stage 2:** more than two teams or more than one entry point. An Entry Control Point with a dedicated ECO and an emergency team.\n3. **Stage 2 (multiple ECPs):** an overall BA sector commander coordinates every ECP.\n\n## ECO responsibilities\n\n- Record time of entry and calculate time of whistle.\n- Monitor telemetry and communications with each team.\n- Initiate emergency procedures when a wearer is overdue.\n\n### Typical durations\n\n| Cylinder | Working duration | Time to whistle |\n|---|---|---|\n| 6.8 L, 300 bar | 39 min | 29 min |\n| 9.0 L, 300 bar | 52 min | 42 min |\n\n![Entry control board at a Stage 2 entry control point](https://raw.githubusercontent.com/Night1405/incendium-knowledge/main/images/entry-control-board.svg)\n*Entry control board at a Stage 2 entry control point.*\n\n> [!WARNING]\n> Low-pressure warning whistles must be acted on immediately: the team withdraws together.\n\n> [!NOTE]\n> Telemetry is a support to entry control, never a replacement for it.\n\n> [!TIP]\n> Brief teams on their exit route before they go in, using the premises plan if one is available.\n", 'hazmat-first-actions': "# Hazmat: First Actions\n\nThe first crews at a hazardous materials incident set the tone for the whole job. Slow down, gather information and protect people before acting.\n\n> [!CAUTION]\n> Approach from upwind and uphill. Do not enter a vapour cloud or walk through spillages.\n\n## Step back, identify, cordon\n\n1. **Step back:** stop short of the scene and look for signs of a release (smells, clouds, people collapsed).\n2. **Identify:** read the hazard warning panel from a distance with binoculars.\n3. **Cordon:** set an initial cordon and keep the public and other agencies out.\n\n## Reading the hazard warning panel\n\n| Panel line | What it tells you |\n|---|---|\n| Emergency Action Code (EAC), e.g. **2X** | Firefighting medium, PPE, risk of violent reaction, contain or dilute |\n| UN number, e.g. **1017** | The substance (1017 = chlorine) |\n| Specialist advice number | Who to call for advice |\n\n> [!NOTE]\n> Record the UN number and EAC: the IRS report asks for them (questions 5.19 to 5.21).\n\n## Request early\n\n- Hazardous Materials Adviser / DIM officer.\n- Additional resources for decontamination.\n- Police for wider cordons and traffic.\n\n> [!TIP]\n> If in doubt, treat it as hazardous until proven otherwise.\n" };
+
+        const ssriSites = [{"id": "S-001", "name": "Eastgate Chemical Works", "address": "Foundry Way, Eastgate", "position": {"x": 1184.2, "y": -2210.9, "z": 30.1}, "poris": 5, "review": "2026-08-12", "hazards": ["Chlorine store (2 x 1 tonne drums), north yard", "Flammable solvents, building C", "11 kV substation on site"], "tactics": "Approach from the south (upwind in prevailing wind). Do not use water on building C store. Meet the site emergency team at the gatehouse. Consider Hazmat officer and DIM on all turnouts.", "water": ["Private hydrant ring main, 150 mm, around buildings A-D", "Open water: canal, 200 m east (pump access via Lock Lane)"], "contacts": [{"name": "Site emergency line (24h)", "value": "0121 555 0190"}, {"name": "Duty manager", "value": "0121 555 0191"}], "images": []}, {"id": "S-002", "name": "Grange Tower", "address": "Grange Road, Northfield", "position": {"x": -312.4, "y": -1204.7, "z": 28.4}, "poris": 4, "review": "2026-09-01", "hazards": ["18-storey residential, single staircase", "Stay put policy (compartmentation)"], "tactics": "Dry riser inlet on the west face. Fire-fighting lift serves all floors. Premises information box at the main entrance.", "water": ["Hydrant nearest the dry riser inlet, about 30 m"], "contacts": [{"name": "Building manager", "value": "0121 555 0144"}], "images": []}];
+        const hyd = { out: { 'H-0144': { reason: 'Valve seized', note: 'Will not turn.', by: 'WCDR A. Smith', at: '12:10' } },
+            reports: officer ? [{ id: 'D-001', hydrant: 'H-0142', reason: 'Obstructed', note: 'Car parked over the cover most evenings.', by: 'FF L. Okafor', at: '12:40' }] : [{ hydrant: 'H-0142' }],
+            review: officer, reasons: ['Valve seized', 'Obstructed', 'Damaged', 'No water / low pressure', 'Cover or frame broken', 'Marker plate missing', 'Cannot locate', 'Other'] };
+        const near = { max: 1000, hydrants: [
+            { id: 'H-0142', x: 1, y: 2, distance: 38, turn: 20, compass: 'NE', street: 'Holly Road' },
+            { id: 'H-0143', x: 1, y: 2, distance: 95, turn: 160, compass: 'S', street: 'Rookery Road' },
+            { id: 'H-0144', x: 1, y: 2, distance: 140, turn: 270, compass: 'W', street: 'Grove Lane' },
+            { id: 'H-0151', x: 1, y: 2, distance: 212, turn: 300, compass: 'NW', street: 'Soho Road' },
+        ] };
+
+        const draftValues = { _groups: { vehicle: [{ '6.3': 'A071', '6.4': '4', '6.6': '2026-10-06T13:42', '6.7': '2026-10-06T13:43', '6.8': '2026-10-06T13:48', '6.9': '2026-10-06T14:40' }] },
+            '1.1': '1042/061026', '1.2': 'FM', '1.3': 'Handsworth', '1.4': 'A. Smith (4127)', '2.1': '2026-10-06T13:41', '4.1': 'Yes', '4.2': { a: '27', d: 'Holly Road', e: 'Handsworth' } };
+        const recordedValues = {"_groups": {"alarm": [], "vehicle": [{"6.2": "ATL", "6.3": "Test", "6.4": "1", "6.5": "Yes", "6.8": "2026-10-06T13:41", "6.9": "2026-10-06T13:41", "6.10": "HomeStation"}], "equipment": [], "manual": [], "facility": [], "safety": [], "victim": []}, "1.1": "1042/061026", "1.3": "Handsworth", "1.4": "WCDR A. Smith (4127)", "3.1": "Fire", "1.2": "FM", "1.5": "No", "2.4": "No", "5.18": "No", "6.1": "0", "6.15": "Yes", "2.1": "2026-10-06T13:41", "2.2": "1", "2.3": "1", "2.5": "2026-10-06T13:41", "2.6": "2026-10-06T13:41", "3.2": "1", "3.5": "Yes", "3.6": "Yes", "3.7": "1", "3.8": "Yes", "3.10": "Yes", "3.11": "1", "3.12": "1", "3.13": "1", "4.1": "Yes", "4.2": {"a": "27", "d": "Holly Road", "e": "Handsworth"}, "4.3a/b": {"x": "1", "y": "2"}, "5.1": "Yes", "5.2": "1", "5.3": "1", "5.4": "1", "5.5": "Yes", "5.6": "1", "5.7": "1", "5.8": "Yes", "5.13": "Yes", "5.14": "1", "5.15": "1", "7.1": "1", "7.2": "1", "7.3": "1", "7.4": "Yes", "7.7": "Yes", "7.11": "Yes", "8.1": "1", "8.3": "1", "8.4": "1", "8.5": "1", "8.6": "1", "8.7": "1", "8.8": "1", "8.9": "1", "8.10": "Yes", "8.11": "2", "8.12": "2", "8.13": "1", "8.14": "1", "8.15": "1", "8.16": "1", "8.17": "Yes", "8.18": "10", "8.19": "Yes", "8.25": "0", "8.28": "1", "8.29": "1", "8.30": "-999", "9.1": "1", "9.2": "1", "9.4": "2", "9.5": "Test"};
+        const answers = {
+            'respond:irsList': () => ({ all: true, write: true, live: overview.incidents.map(i => ({ ref: i.ref, opening: i.opening, address: i.address, category: i.category })),
+                reports: [{ id: 'DRAFT-1-1', status: 'Draft', ref: '1042/061026', type: '', address: '27 Holly Road', author: 'A. Smith', mine: true },
+                          { id: 'IRS-2026-0002', status: 'Recorded', ref: '1031/061026', type: 'Dwelling', address: '3 Wellington Road', author: 'A. Smith', mine: true },
+                          { id: 'IRS-2026-0001', status: 'Recorded', ref: '1019/061026', type: 'AFA', address: 'City Hospital', author: 'J. Patel' }] }),
+            'respond:irsNew': () => ({ ok: true, id: 'DRAFT-1-1' }),
+            'respond:irsGet': d => d.id.indexOf('DRAFT') === 0
+                ? { ok: true, id: d.id, status: 'Draft', author: 'A. Smith', values: JSON.parse(JSON.stringify(draftValues)), prefilled: ['1.1', '1.2', '1.3', '1.4', '2.1', '4.1', '4.2', 'vehicle'], saved: '14:06', frs: 'FM' }
+                : { ok: true, id: d.id, status: 'Recorded', author: 'A. Smith', date: '06 Oct 2026', values: recordedValues, frs: 'FM' },
+            'respond:irsSave': () => ({ ok: true, saved: '14:10' }),
+            'respond:irsSubmit': () => ({ ok: true, id: 'IRS-2026-0003' }),
+            'respond:irsDelete': () => ({ ok: true }),
+            'respond:hydrants': () => hyd,
+            'respond:nearby': () => near,
+            'respond:hydrantDefect': () => ({ ok: true }),
+            'respond:hydrantReview': () => ({ ok: true }),
+            'respond:ssri': () => ({ sites: ssriSites, edit: officer }),
+            'respond:ssriSave': d => ({ ok: true, id: d.id || 'S-003' }),
+            'respond:ssriDelete': () => ({ ok: true }),
+            'respond:photo': () => ({ ok: true, url: 'https://picsum.photos/200/150' }),
+            'respond:kb': () => ({ ok: true, loaded: true, loadedAt: '06 Oct 2026 14:00', categories: [{ id: 'ba', name: 'Breathing Apparatus' }, { id: 'hazmat', name: 'Hazardous Materials' }, { id: 'rtc', name: 'Road Traffic Collisions' }], articles: kbArticles }),
+            'respond:kbArticle': d => { const a = kbArticles.find(x => x.id === d.id); return a ? { ok: true, article: a, body: kbBody[a.id] } : { ok: false }; },
+            'respond:overview': () => overview,
+            'respond:incident': d => { const i = overview.incidents.find(x => x.ref === d.ref); return i ? { ok: true, incident: i, log: logs[d.ref] || [] } : { ok: false }; },
+            'respond:state': () => state(),
+            'respond:setStatus': d => { unitStatus = d.code; return { ok: true }; },
+            'respond:attach': () => ({ ok: true }),
+            'respond:channel': () => ({ ok: true }),
+            'respond:settings': d => { Object.assign(settings, d); return { ok: true, settings }; },
+            'respond:pushover': d => {
+                if (d.action === 'key') settings.push[d.which + 'Hint'] = d.value.slice(-4);
+                if (d.action === 'remove') settings.push[d.which + 'Hint'] = null;
+                if (d.action === 'on') settings.push.on = d.value;
+                if (d.action === 'pages') Object.assign(settings.push, d, { action: undefined });
+                return { ok: true, settings };
+            },
+            'respond:ack': d => { const i = queue.findIndex(t => t.ref === d.ref); if (i >= 0) queue.splice(i, 1); return { ok: true, queue: queue.slice() }; },
+            'respond:testAlert': () => { const t = { ref: 'TEST', title: 'Test of your alert tone', address: 'No action needed', text: 'This is a test.', station: '', callsigns: ['A071'], time: '14:02', test: true, reason: 'assigned' }; queue.push(t); setTimeout(() => (handlers.turnout || []).forEach(f => f({ turnout: t })), 50); return { ok: true }; },
+            'respond:waypoint': () => true,
+            'respond:preview': () => true,
+        };
+
+        window.IncendiumKit = {
+            request: (name, data) => Promise.resolve(answers[name] ? answers[name](data || {}) : false),
+            on: (type, fn) => { (handlers[type] = handlers[type] || []).push(fn); },
+        };
+        // A turnout arriving: press T.
+        document.addEventListener('keydown', e => {
+            if (e.key === 't' && officer) { const t = turnout(); queue.push(t); (handlers.turnout || []).forEach(f => f({ turnout: t })); }
+        });
+        document.body.dataset.device = device;
+    })();
+    </script>
+    <script src="vendor/marked.min.js"></script>
+    <script src="vendor/purify.min.js"></script>
+    <script src="../../../../Originals/Phone/dev/design/irs-schema.js"></script>
+    <script src="irs.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
